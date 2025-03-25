@@ -88,7 +88,7 @@ int receive_message(char *buffer, struct sockaddr_in *client_addr, socklen_t *ad
         return -1;
     }
 
-    buffer[recv_len] = '\0'; // Null-terminate received string
+    buffer[recv_len] = '\0'; 
     received_count++;
 
     printf("Received from %s:%d - %s\n",
@@ -126,15 +126,15 @@ void server_loop() {
 }
 
 int main(int argc, char *argv[]) {
-    signal(SIGINT, handle_sigint);     // Register signal handler
-    parse_arguments(argc, argv);       // Parse command-line arguments
-    setup_socket();                    // Create UDP socket
+    signal(SIGINT, handle_sigint);     
+    parse_arguments(argc, argv);       
+    setup_socket();                  
 
     struct sockaddr_in server_addr;
-    bind_socket(&server_addr);         // Bind the socket
+    bind_socket(&server_addr);        
 
-    server_loop();                     // Start the main loop
+    server_loop();                     
 
-    cleanup();                         // Cleanup (in case)
+    cleanup();                         
     return 0;
 }
