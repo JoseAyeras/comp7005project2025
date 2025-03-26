@@ -7,7 +7,7 @@
 #include <signal.h>
 
 // Create UDP socket
-void setup_socket(int& socket) {
+void setup_socket(int * socket) {
     if ((socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
