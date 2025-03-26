@@ -383,9 +383,10 @@ void packet_thread(pt_param & params){
 
 void idle(struct arguments& arguments, struct sockaddr_in * server_addr){	
     struct sockaddr_in remote_addr;
+    struct sockaddr_in * target_addr = (struct target_addr *)malloc(sizeof(struct sockaddr_in));
     socklen_t addr_len = sizeof(remote_addr);
     char buffer[BUFFER_SIZE];
-    int index;
+    int index, source_sockfd;
 
     while (1) {
             //iterate over the entirety of the proxy_socket array
@@ -415,54 +416,51 @@ void idle(struct arguments& arguments, struct sockaddr_in * server_addr){
                             index = num_sockets;
                             ++num_sockets;
                     }
-                    //use index to get value of socket file descriptor to relay message to server
-                    ssize_t sent = sendto(
-                        proxy_socket[index], //source sockfd, which has proxy ip address and the port mapped to the client
-                        buffer,
-                        recv_len,
-                        0,
-                        (struct sockaddr *), //dest socket, made of server ip address and port
-                        addr_len);
+                    //dest socket, made of server ip address and port
+                    target_addr->sin_port = arguments.port;
+                    target_addr->sin_addr = arguments.server_ip;
                     //
+                    source_sockfd = proxy_socket.values[index]; //source sockfd, which has proxy ip address and the port mapped to the client
                 } else {//packet from server
                     //get index of entry in map from value (proxy port)
                     index = getValueIndex(client_to_sockfd, proxy_socket[i]);
                     
                     
                     //use index to get value of socket file descriptor to relay message to server
-                    struct sockaddr_in client_addr;
-                    client_addr.sin_port = arguments.port;
-                    client_addr.sin_addr = client_to_sockfd.keys[index];
-                    
-                    //need to create the pt_node to pass into pt_param
-                    struct pt_node * new_node = (struct pt_node *)malloc(sizeof(struct pt_node));
-                    
-                    struct pt_param params {
-                    	true,
-                    	arguments,
-                    	new_node,
-                    	proxy_socket[0], //source sockfd, which has the proxy ip address and the server port
-                    	buffer,
-                    	recv_len,
-                    	client_addr, //dest socket address, which has the client ip address and server port
-                    	addr_len
-                    }
-                    //now that we have the params to pass into thread creation, we create the thread
-                    if(pthread_create(
-                    	&(new_node->packet_thread),//address to put the thread ID
-                    	0,//no idea, apparently it's used to override default thread attributes and can be NULL
-                    	&packet_thread,//thread execution routine
-                    	params//thread parameters
-                    ) == 0){
-                    	new_node->next = head;
-                    	head->prev = new_node;
-                    	
-                    } else {
-                    	//failed to create a thread
-                    	//why?
-                    	perror("Failed to create a packet thread!");
-                    }
+                    target_addr->sin_port = arguments.port;
+                    target_addr->sin_addr = client_to_sockfd.keys[index];
+                    source_sockfd = proxy_socket.values[0]; //source sockfd, which has the proxy ip address and the server port
                 }
+                
+                    
+	            //need to create the pt_node to pass into pt_param
+	            struct pt_node * new_node = (struct pt_node *)malloc(sizeof(struct pt_node));
+	            
+	            struct pt_param params {
+	            	true,
+	            	arguments,
+	            	new_node,
+	            	source_sockfd,
+	            	buffer,
+	            	recv_len,
+	            	target_addr, //dest socket address, which has the client ip address and server port
+	            	addr_len
+	            }
+	            //now that we have the params to pass into thread creation, we create the thread
+	            if(pthread_create(
+	            	&(new_node->packet_thread),//address to put the thread ID
+	            	0,//no idea, apparently it's used to override default thread attributes and can be NULL
+	            	&packet_thread,//thread execution routine
+	            	params//thread parameters
+	            ) == 0){
+	            	new_node->next = head;
+	            	head->prev = new_node;
+	            	
+	            } else {
+	            	//failed to create a thread
+	            	//why?
+	            	perror("Failed to create a packet thread!");
+	            }
             }
         }
     }
