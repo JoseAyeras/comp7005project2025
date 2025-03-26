@@ -324,7 +324,8 @@ void handle_args(
     	//not needed here, define in idle function
 }
 
-void packet_thread(
+void packet_thread(pt_param & params){
+/*
 	bool is_client,				//is this a client, or a server?
 	arguments& arguments,			//arguments
 	pt_node * self,				//node in doubly linked list
@@ -333,38 +334,51 @@ void packet_thread(
 	ssize_t msg_len,			//message length
 	struct sockaddr_in* target_addr,	//destination address
 	socklen_t* addr_len){			//address length
+	*/
     float roll = ((float)rand())/(RAND_MAX);
     bool delay = false;
     //roll drop
-    is_client ?
-        (roll < arguments.client_drop_chance ? return : )
-      : (roll < arguments.server_drop_chance ? return : );
+    params.is_client ?
+        (roll < params.arguments.client_drop_chance ?
+    	    (
+    		params.self->next ? params.self->next->prev = params.self->prev : ;
+    		params.self->prev ? params.self->prev->next = params.self->next : ;
+	    )
+            return
+            : )
+      : (roll < params.arguments.server_drop_chance ?
+    	    (
+    		params.self->next ? params.self->next->prev = params.self->prev : ;
+    		params.self->prev ? params.self->prev->next = params.self->next : ;
+	    )
+            return
+            : )
     //roll delay
     roll = ((float)rand())/(RAND_MAX);
     is_client ?
-        (roll < arguments.client_delay_chance ? delay = true : )
-      : (roll < arguments.server_delay_chance ? delay = true : );
+        (roll < params.arguments.client_delay_chance ? delay = true : )
+      : (roll < params.arguments.server_delay_chance ? delay = true : );
     //determine delay
     delay ?
     	roll = ((float)rand())/(RAND_MAX),
     	is_client ?
-    	    sleep(roll * (arguments.client_delay_max - arguments.client_delay_min) + arguments.client_delay_min)
-    	  : sleep(roll * (arguments.server_delay_max - arguments.server_delay_min) + arguments.server_delay_min);
+    	    sleep(roll * (params.arguments.client_delay_max - params.arguments.client_delay_min) + params.arguments.client_delay_min)
+    	  : sleep(roll * (params.arguments.server_delay_max - params.arguments.server_delay_min) + params.arguments.server_delay_min);
     //delay (above)
     //transmit
     ssize_t sent = sendto(
-    	sockfd,			//sending socket file descriptor
-    	buffer,				//message
-    	msg_len,			//message length
-    	0,				//flags
-    	(struct sockaddr *)target_addr,	//destination address
-    	addr_len);			//length of the address
+    	params.sockfd,				//sending socket file descriptor
+    	params.buffer,				//message
+    	params.msg_len,				//message length
+    	0,					//flags
+    	(struct sockaddr *)params.target_addr,	//destination address
+    	params.addr_len);			//length of the address
     (sent < 0) ? perror("packet_thread sendto failed");
     //cleanup
     //num_threads--;
-    self->next ? self->next->prev = self->prev : ;
-    self->prev ? self->prev->next = self->next : ;
-    free(self);
+    params.self->next ? params.self->next->prev = params.self->prev : ;
+    params.self->prev ? params.self->prev->next = params.self->next : ;
+    free(params.self);
 }
 
 void idle(struct arguments& arguments, struct sockaddr_in * server_addr){	
@@ -412,17 +426,42 @@ void idle(struct arguments& arguments, struct sockaddr_in * server_addr){
                     //
                 } else {//packet from server
                     //get index of entry in map from value (proxy port)
-                    index = getValueIndex(proxy_socket[i]);
+                    index = getValueIndex(client_to_sockfd, proxy_socket[i]);
                     
                     
                     //use index to get value of socket file descriptor to relay message to server
-                    ssize_t sent = sendto(
-                        proxy_socket[0], //source sockfd, which has the proxy ip address and the server port
-                        buffer,
-                        recv_len,
-                        0,
-                        (struct sockaddr *), //dest socket address, which has the client ip address and server port
-                        addr_len);
+                    struct sockaddr_in client_addr;
+                    client_addr.sin_port = arguments.port;
+                    client_addr.sin_addr = client_to_sockfd.keys[index];
+                    
+                    //need to create the pt_node to pass into pt_param
+                    struct pt_node * new_node = (struct pt_node *)malloc(sizeof(struct pt_node));
+                    
+                    struct pt_param params {
+                    	true,
+                    	arguments,
+                    	new_node,
+                    	proxy_socket[0], //source sockfd, which has the proxy ip address and the server port
+                    	buffer,
+                    	recv_len,
+                    	client_addr, //dest socket address, which has the client ip address and server port
+                    	addr_len
+                    }
+                    //now that we have the params to pass into thread creation, we create the thread
+                    if(pthread_create(
+                    	&(new_node->packet_thread),//address to put the thread ID
+                    	0,//no idea, apparently it's used to override default thread attributes and can be NULL
+                    	&packet_thread,//thread execution routine
+                    	params//thread parameters
+                    ) == 0){
+                    	new_node->next = head;
+                    	head->prev = new_node;
+                    	
+                    } else {
+                    	//failed to create a thread
+                    	//why?
+                    	perror("Failed to create a packet thread!");
+                    }
                 }
             }
         }
